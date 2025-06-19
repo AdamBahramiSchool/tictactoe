@@ -37,6 +37,8 @@ class MCTS:
         
     def monteCarloPlayer(self, timelimit = 4):
         """Entry point for Monte Carlo tree search"""
+        if timelimit<=0:
+                raise ValueError("MCTS must be called with a positive timelimit.")
         start = time.perf_counter()
         end = start + timelimit
         childNode=None
@@ -50,6 +52,7 @@ class MCTS:
          
          Once time is up use getChildWithMaxScore() to pick the node to move to
         """
+        
         while time.perf_counter()<end:
             # select phase
             startNode=self.selectNode(self.root)
@@ -57,8 +60,9 @@ class MCTS:
             leaf = childNode if childNode else startNode
             result = self.simulateRandomPlay(leaf)
             self.backPropagation(leaf, result)
-        
-        print("MCTS: your code goes here. 10pt.")
+        total_time = time.perf_counter() - start
+        print(f"MCTS completed in {total_time:.2f} seconds")
+        # print("MCTS: your code goes here. 10pt.")
 
         winnerNode = self.root.getChildWithMaxScore()
         assert(winnerNode is not None)
@@ -71,7 +75,7 @@ class MCTS:
         while currentNode.children:
             currentNode=self.findBestNodeWithUCT(currentNode)
         return currentNode
-        print("Your code goes here 5pt.")
+        # print("Your code goes here 5pt.")
 
 
     def findBestNodeWithUCT(self, nd):
@@ -86,7 +90,10 @@ class MCTS:
         childUCT = []
         for child in nd.children:
             childUCTval=self.uctValue(parent_visit,child.winScore,child.visitCount)
-            if childUCTval>uctVal or uctVal is None:
+            if uctVal is None:
+                uctVal=childUCTval
+                childUCT=[child]
+            elif childUCTval>uctVal:
                 uctVal=childUCTval
                 childUCT=[child]
             elif childUCTval==uctVal:
@@ -97,8 +104,7 @@ class MCTS:
             return None
         return random.choice(childUCT) 
         
-        print("Your code goes here 5pt.")
-        return None
+       
 
 
     def uctValue(self, parentVisit, nodeScore, nodeVisit):
@@ -107,16 +113,15 @@ class MCTS:
         if nodeVisit == 0:
             return float('inf')
         return (nodeScore/nodeVisit) + self.exploreFactor *math.sqrt(math.log(parentVisit)/nodeVisit)
-        print("Your code goes here 3pt.")
-        pass
-
+        # print("Your code goes here 3pt.")
+      
    
    
     def expandNode(self, nd):
         """generate the child nodes for node nd. For convenience, generate
         all the child nodes and attach them to nd."""
         state = nd.state
-        print("Your code goes here 5pt.")
+        # print("Your code goes here 5pt.")
         for action in self.game.actions(state):
             new_state=self.game.result(state,action)
             child_node=self.Node(new_state,nd)
@@ -132,7 +137,7 @@ class MCTS:
         Note: pay attention nd may be itself a termination node. Use compute_utility 
         to check for it.
         """
-        print("Your code goes here 7pt.")
+        # print("Your code goes here 7pt.")
         state = copy.deepcopy(nd.state)
 
         # Check if nd is already a terminal node
@@ -177,6 +182,6 @@ class MCTS:
             if nd.state.to_move != winningPlayer:  
                 nd.winScore += 1
             nd = nd.parent
-        print("Your code goes here 5pt.")
+        # print("Your code goes here 5pt.")
 
 
