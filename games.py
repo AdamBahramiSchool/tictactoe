@@ -89,7 +89,8 @@ def minmax(game, state):
     if len(best_action)==1:
         # If there is only one best action, return it
         return best_action[0]
-    
+    elif len(best_action)==0:
+        return None
     return random.choice(best_action)
     # First prototype implementation done
     # If there are multiple best actions, randomly choose one
@@ -102,9 +103,14 @@ def minmax_cutoff(game, state):
     forward all the way to the cutoff depth. At that level use evaluation func.
     """
     print("your code goes here 5pt")
+    
     player=game.to_move(state)
     cutoff_depth=game.d
+    cache={}
     def max_value(state, depth):
+        key = (frozenset(state.board.items()), depth)
+        if key in cache:
+            return cache[key]
         if game.terminal_test(state):
             return game.utility(state,player)
         elif depth==0:
@@ -115,6 +121,9 @@ def minmax_cutoff(game, state):
         return v
     
     def min_value(state,depth):
+        key = (frozenset(state.board.items()), depth)
+        if key in cache:
+            return cache[key]
         if game.terminal_test(state):
             return game.utility(state,player)
         elif depth==0:
@@ -138,6 +147,8 @@ def minmax_cutoff(game, state):
             best_action.append(action)
     if len(best_action)==1:
         return best_action[0]
+    elif len(best_action)==0:
+        return None
     return random.choice(best_action)
 
     # first prototype 
@@ -150,13 +161,51 @@ def alpha_beta(game, state):
     """Search game to determine best action; use alpha-beta pruning.
      this version searches all the way to the leaves."""
     player = game.to_move(state)
-
     alpha = -np.inf
     beta = np.inf
-    best_action = None
-    print("alpha_beta: Your code goes here 10pt.")
+    cache={}
+    def max_value(state, alpha, beta):
+        key = frozenset(state.board.items())
+        if key in cache:
+            return cache[key]
+        if game.terminal_test(state):
+            return game.utility(state, player)
+        val = -np.inf
+        for action in game.actions(state):
+            val = max(val, min_value(game.result(state, action), alpha, beta))
+            if val >= beta:
+                return val
+            alpha = max(alpha, val)
+        return val 
 
-    return best_action
+    def min_value(state, alpha, beta):
+        key = frozenset(state.board.items())
+        if key in cache:
+            return cache[key]
+        if game.terminal_test(state):
+            return game.utility(state, player)
+        val = np.inf
+        for action in game.actions(state):
+            val = min(val, max_value(game.result(state, action), alpha, beta))
+            if val <= alpha:
+                return val
+            beta = min(beta, val)
+        return val
+
+    best_val = -np.inf
+    best_actions = []
+    for action in game.actions(state):
+        v = min_value(game.result(state, action), alpha, beta)
+        if v > best_val:
+            best_val = v
+            best_actions = [action]
+        elif v == best_val:
+            best_actions.append(action)
+    if len(best_actions)==1:
+        return best_actions[0]
+    elif len(best_actions)==0:
+        return None
+    return random.choice(best_actions)
 
 
 def alpha_beta_cutoff(game, state):
@@ -165,14 +214,58 @@ def alpha_beta_cutoff(game, state):
     player = game.to_move(state)
     print("Your code here")
 
-    # Body of alpha_beta_cutoff_search starts here:
-    # The default test cuts off at depth d or at a terminal state
+    player = game.to_move(state)
     alpha = -np.inf
     beta = np.inf
-    best_action = None
-    print("Your code here 10pt.")
+    cutoff_depth = game.d  # depth limit set externally
+    cache={}
+    def max_value(state, alpha, beta, depth):
+        key = (frozenset(state.board.items()), depth)
+        if key in cache:
+            return cache[key]
+        if game.terminal_test(state):
+            return game.utility(state, player)
+        if depth == 0:
+            return game.eval1(state)
+        val = -np.inf
+        for action in game.actions(state):
+            val = max(val, min_value(game.result(state, action), alpha, beta, depth - 1))
+            if val >= beta:
+                return val
+            alpha = max(alpha, val)
+        return val
 
-    return best_action
+    def min_value(state, alpha, beta, depth):
+        key = (frozenset(state.board.items()), depth)
+        if key in cache:
+            return cache[key]
+        if game.terminal_test(state):
+            return game.utility(state, player)
+        if depth == 0:
+            return game.eval1(state)
+        val = np.inf
+        for action in game.actions(state):
+            val = min(val, max_value(game.result(state, action), alpha, beta, depth - 1))
+            if val <= alpha:
+                return val
+            beta = min(beta, val)
+        return val
+
+    best_val = -np.inf
+    best_action = []
+    for action in game.actions(state):
+        v = min_value(game.result(state, action), alpha, beta, cutoff_depth - 1)
+        if v > best_val:
+            best_val = v
+            best_action = [action]
+        elif v == best_val:
+            best_action.append(action)
+
+    if len(best_action)==1:
+        return best_action[0]
+    elif len(best_action)==0:
+        return None
+    return random.choice(best_action)
 
 
 
@@ -188,20 +281,31 @@ def alpha_beta_player(game, state):
     Hint: for speedup use random_player for start of the game when you see search time is too long"""
     print("Your code goes here 3pt.")
     
-    if( game.timer < 0):
+    if game.timer < 0:
         game.d = -1
         return alpha_beta(game, state)
-    random_state=random_player(game, state)
-    best_action=alpha_beta_cutoff(game,random_state)
+
+    # Use random move as fallback if time runs out
+    fallback_move = random_player(game, state)
+    move = None
     start = time.perf_counter()
     end = start + game.timer
-    """use the above timer to implement iterative deepening using alpha_beta_cutoff() version"""
-    move = None
-    
-    print("Your code goes here 2pt.")
+    depth = 0
 
-    print("iterative deepening to depth: ", game.d)
-    return move
+    while time.perf_counter() < end:
+        game.d = depth
+        valid_move = alpha_beta_cutoff(game, state)
+        if valid_move is not None:
+            move = valid_move
+            print("Found move at Depth:", depth)
+        else:
+            print("move was not found at depth: ", depth)
+            break 
+        depth += 1
+
+    print("iterative deepening to depth:", depth)
+    return move if move else fallback_move
+ 
 
 
 def minmax_player(game, state):
@@ -213,14 +317,27 @@ def minmax_player(game, state):
         game.d = -1 #no depth cutoff limit of no time limit is set
         return minmax(game, state)
     # if game timer is greater than 0, use iterative deepending
+    fallback_move=random_player(game,state)
     start = time.perf_counter()
     end = start + game.timer
     """use the above timer to implement iterative deepening loop bellow, using minmax_cutoff(), controlled by the timer"""
     move = None
-    print("Your code goes here 3pt.")
+    depth=0
+    while time.perf_counter() < end:
+        game.d=depth
+        optionalmove= minmax_cutoff(game, state)
+        if optionalmove is not None:
+            # if move is not None, it means we have a valid move
+            print("Found move at Depth: ", game.d)
+            move=optionalmove
+        else:
+            # no moves returned
+            break
+        depth+=1
+    
 
     print("minmax_player: iterative deepening to depth: ", game.d)
-    return move
+    return move if move else fallback_move
 
 
 
@@ -345,13 +462,24 @@ class TicTacToe(Game):
         in line in a direction. For example k_in_row(board, 'X', (0, 1), self.k, self.k) returns 
         a pair (true/false, count) indicating if there are k 'X' in column direction."""
         print("To be done by students 5 pt")
-        if k_in_row(board,'X',(0,1), self.k, self.size) or k_in_row(board,'X',(1,0), self.k, self.size) or k_in_row(board,'X',(1,1), self.k, self.size) or k_in_row(board,'X',(1,-1), self.k, self.size):
-            return self.k
-        elif k_in_row(board,'O',(0,1), self.k, self.size) or k_in_row(board,'O',(1,0), self.k, self.size) or k_in_row(board,'O',(1,1), self.k, self.size) or k_in_row(board,'O',(1,-1), self.k, self.size):
-            return -self.k
+        for direction in([(0,1), (1,0), (1,1), (1,-1)]):
+            win_possibility_X, X_lineCount=self.k_in_row(board,'X', direction,self.k, self.size)
+            if win_possibility_X==True:
+                return self.k
+            win_possibility_O,O_lineCount=self.k_in_row(board,'O',direction, self.k, self.size)
+            if win_possibility_O==True:
+                return -self.k
+            
         # first prototype implementation done
         return 0
         
+
+    def possibleKComplete(self,board, player, k, size):
+        total_count=0
+        for direction in([(0,1),(1,0),(1,1),(1,-1)]):
+            boolean,count=self.k_in_row(board, player,direction, k, size)
+            total_count+=count    
+        return total_count
     # evaluation function, version 1
     def eval1(self, state):
         """design and implement evaluation function for state.
@@ -365,7 +493,17 @@ class TicTacToe(Game):
         how to good the state is for the player to win the game from here,
         and also it needs to be fast to compute.
         """
-
+        # give most weight to k-1, second most weight to k-2 and third most weight to k-3, as k-1 is closest solvable board config so gets more weight
+        X_val=0
+        O_val=0
+        for i in range(1,min(4,self.k)):
+            weight=4-i
+            X_val+= weight*self.possibleKComplete(state.board,'X',self.k-i, self.size)
+            O_val+=weight*self.possibleKComplete(state.board,'O',self.k-i, self.size)
+        
+        # weight out X values and 0 values, then calculate difference
+        return X_val - O_val
+        # first prototype done
         print("Your code goes here 15pt.")
 
         return 0
